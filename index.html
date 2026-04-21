@@ -367,7 +367,7 @@
             <ul>
                 <li>同じ色を縦か横に<strong>4つ以上</strong>繋げると消えます。</li>
                 <li><strong>5個以上</strong>消すと特殊な「ボム」が出現！隣でブロックを消すと起爆します。</li>
-                <li><strong>30回</strong>消去するとゲームクリアです。</li>
+                <li>ブロックを<strong>20個</strong>消去するとゲームクリアです。</li>
                 <li>左から3列目が上まで埋まるとゲームオーバー。</li>
             </ul>
             <strong>【操作方法】</strong>
@@ -391,7 +391,7 @@
             </div>
             <div class="score-box">
                 CLEARED
-                <span><span id="clear-count" style="color: #4bff4b;">0</span> / 30</span>
+                <span><span id="clear-count" style="color: #4bff4b;">0</span> / 20</span>
             </div>
         </div>
         <div class="next-box">
@@ -439,7 +439,7 @@ let score = 0;
 let highScore = 0; 
 let chainCount = 0;
 let clearCount = 0; 
-const TARGET_CLEAR_COUNT = 30;
+const TARGET_CLEAR_COUNT = 20;
 let state = 'START'; 
 let currentPuyo = null;
 let nextPuyo = null;
@@ -790,9 +790,11 @@ function update(time) {
             let pendingBombsLocal = [];
             let maxClearCount = 0;
 
-            // 通常グループの消去回数カウントとボム生成チェック
+            // 追加：消去したブロックの「個数」を加算する
+            clearCount += checkResult.allToClear.length;
+
+            // 通常グループのボム生成チェック
             checkResult.groups.forEach(group => {
-                clearCount++;
                 if (group.length >= 5) {
                     hasSpecial = true;
                     maxClearCount = Math.max(maxClearCount, group.length);
