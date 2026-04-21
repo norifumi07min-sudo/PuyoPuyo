@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>スマホ向け ぷよぷよ風パズル</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --board-bg: #0f3460;
+            --ui-bg: rgba(0, 0, 0, 0.5);
+            --btn-color: #e94560;
+            --btn-shadow: #b33951;
+            --text-color: #fff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none; /* スマホのズームやスクロールを防止 */
+            overflow: hidden;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: #16213e;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            position: relative; /* オーバーレイ基準位置 */
+        }
+
+        /* 衝撃フラッシュエフェクト */
+        #flash-effect {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 40;
+            transition: opacity 0.05s ease-out;
+        }
+        #flash-effect.flash {
+            opacity: 0.8;
+        }
+
+        .header {
+            height: 90px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+            background: var(--ui-bg);
+            border-bottom: 2px solid #2a3b5c;
+            z-index: 10;
+        }
+
+        .score-container {
+            display: flex;
+            gap: 15px;
+        }
+
+        .score-box {
+            font-size: 12px;
+            font-weight: bold;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .score-box span {
+            color: #ffcc00;
+            font-size: 20px;
+        }
+
+        .next-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        #next-canvas {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+
+        .board-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding: 15px;
+            overflow: hidden;
+            z-index: 10;
+        }
+
+        /* 画面揺れ(スクリーンシェイク)エフェクト */
+        @keyframes shake {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            10% { transform: translate(-6px, -6px) rotate(-1deg); }
+            20% { transform: translate(6px, 6px) rotate(1deg); }
+            30% { transform: translate(-6px, 6px) rotate(0deg); }
+            40% { transform: translate(6px, -6px) rotate(1deg); }
+            50% { transform: translate(-6px, -6px) rotate(-1deg); }
+            60% { transform: translate(6px, 6px) rotate(0deg); }
+            70% { transform: translate(-6px, 6px) rotate(1deg); }
+            80% { transform: translate(6px, -6px) rotate(-1deg); }
+            90% { transform: translate(-6px, -6px) rotate(0deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+        .board-container.shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        #main-canvas {
+            background: var(--board-bg);
+            border-radius: 8px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 0 5px 15px rgba(0,0,0,0.5);
+            max-height: 100%;
+            max-width: 100%;
+            aspect-ratio: 1 / 2;
+        }
+
+        .controls {
+            height: 140px;
+            display: flex;
+            justify-content: space-evenly;
+            align-items: center;
+            background: var(--ui-bg);
+            padding: 10px;
+            border-top: 2px solid #2a3b5c;
+            z-index: 10;
+        }
+
+        .btn {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            background: var(--btn-color);
+            color: #fff;
+            font-size: 28px;
+            border: none;
+            box-shadow: 0 6px 0 var(--btn-shadow);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .btn:active, .btn.active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 var(--btn-shadow);
+        }
+
+        #btn-rot {
+            background: #4b7dff;
+            box-shadow: 0 6px 0 #2a4c9e;
+        }
+        #btn-rot:active, #btn-rot.active {
+            box-shadow: 0 0 0 #2a4c9e;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            border: 2px solid #e94560;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+            z-index: 50;
+        }
+
+        #game-over.active {
+            display: block;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        #game-over h2 {
+            margin: 0 0 10px 0;
+            color: #e94560;
+            font-size: 32px;
+        }
+
+        #game-over p {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        #retry-btn {
+            background: #4bff4b;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 8px;
+            box-shadow: 0 4px 0 #2a9e2a;
+            cursor: pointer;
+        }
+        #retry-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #2a9e2a;
+        }
+
+        #chain-display {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            font-weight: bold;
+            color: #ffcc00;
+            text-shadow: 2px 2px 5px rgba(0,0,0,1), 0 0 10px #ff0;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 20;
+        }
+        #chain-display.show {
+            opacity: 1;
+            animation: bounce 0.5s;
+        }
+        @keyframes bounce {
+            0% { transform: translate(-50%, -30%) scale(0.8); }
+            50% { transform: translate(-50%, -60%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        #game-clear {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            border: 2px solid #4bff4b;
+            box-shadow: 0 0 30px rgba(75, 255, 75, 0.5);
+            z-index: 50;
+        }
+
+        #game-clear.active {
+            display: block;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #game-clear h2 {
+            margin: 0 0 10px 0;
+            color: #4bff4b;
+            font-size: 32px;
+            text-shadow: 0 0 10px rgba(75, 255, 75, 0.8);
+        }
+
+        #game-clear p {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        #clear-retry-btn {
+            background: #ffcc00;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 8px;
+            box-shadow: 0 4px 0 #cc9900;
+            cursor: pointer;
+        }
+        #clear-retry-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #cc9900;
+        }
+
+        #start-screen {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(26, 26, 46, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 20px;
+            text-align: center;
+        }
+
+        #start-screen h1 {
+            color: #ff4b4b;
+            margin: 0 0 20px 0;
+            text-shadow: 0 4px 0 #b33951;
+            font-size: 36px;
+        }
+
+        .rules {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: left;
+            line-height: 1.6;
+            max-width: 320px;
+            font-size: 14px;
+        }
+
+        .rules ul {
+            padding-left: 20px;
+            margin: 5px 0 15px 0;
+        }
+
+        #start-btn {
+            background: #4b7dff;
+            color: #fff;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 8px;
+            box-shadow: 0 6px 0 #2a4c9e;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        #start-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 #2a4c9e;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <!-- フラッシュバック用オーバーレイ -->
+    <div id="flash-effect"></div>
+
+    <div id="start-screen">
+        <h1>ぷよ風パズル</h1>
+        <div class="rules">
+            <strong>【ルール】</strong>
+            <ul>
+                <li>同じ色を縦か横に<strong>4つ以上</strong>繋げると消えます。</li>
+                <li><strong>5個以上</strong>消すと特殊な「ボム」が出現！隣でブロックを消すと起爆します。</li>
+                <li><strong>30回</strong>消去するとゲームクリアです。</li>
+                <li>左から3列目が上まで埋まるとゲームオーバー。</li>
+            </ul>
+            <strong>【操作方法】</strong>
+            <ul>
+                <li><strong>スマホ:</strong> 下部のボタンをタップ</li>
+                <li><strong>PC:</strong> 矢印キー (上 または スペースで回転)</li>
+            </ul>
+        </div>
+        <button id="start-btn">GAME START</button>
+    </div>
+
+    <div class="header">
+        <div class="score-container">
+            <div class="score-box">
+                HI-SCORE
+                <span id="hi-score">0</span>
+            </div>
+            <div class="score-box">
+                SCORE
+                <span id="score">0</span>
+            </div>
+            <div class="score-box">
+                CLEARED
+                <span><span id="clear-count" style="color: #4bff4b;">0</span> / 30</span>
+            </div>
+        </div>
+        <div class="next-box">
+            NEXT
+            <canvas id="next-canvas" width="80" height="120"></canvas>
+        </div>
+    </div>
+
+    <div class="board-container">
+        <!-- 論理サイズ 300x600 (横6マス、縦12マス) -->
+        <canvas id="main-canvas" width="300" height="600"></canvas>
+        <div id="chain-display">2 連鎖!</div>
+        
+        <div id="game-over">
+            <h2>GAME OVER</h2>
+            <p>Score: <span id="final-score">0</span></p>
+            <button id="retry-btn">RETRY</button>
+        </div>
+
+        <div id="game-clear">
+            <h2>GAME CLEAR!</h2>
+            <p>Score: <span id="final-clear-score">0</span></p>
+            <button id="clear-retry-btn">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="btn-left" class="btn">◀</button>
+        <button id="btn-down" class="btn">▼</button>
+        <button id="btn-rot" class="btn">↻</button>
+        <button id="btn-right" class="btn">▶</button>
+    </div>
+</div>
+
+<script>
+// --- ゲーム設定と定数 ---
+const COLS = 6;
+const ROWS = 12;
+const CELL_SIZE = 50; // 300 / 6
+const COLORS = ['#ff4b4b', '#4b7dff', '#4bff4b', '#ffdd4b']; // 赤、青、緑、黄
+
+// --- 状態変数 ---
+let board = [];
+let score = 0;
+let highScore = 0; 
+let chainCount = 0;
+let clearCount = 0; 
+const TARGET_CLEAR_COUNT = 30;
+let state = 'START'; 
+let currentPuyo = null;
+let nextPuyo = null;
+let lastTime = 0;
+let dropCounter = 0;
+let isFastDrop = false;
+let reqId = null;
+let fallingBlocks = [];
+let pendingBombs = []; // 生成待機中のボム
+let floatingTexts = []; // 称賛テキスト等のエフェクト配列
+let chainDisplayTimer = null; // 追加: 連鎖表示を消すためのタイマー
+
+// DOM要素
+const mainCanvas = document.getElementById('main-canvas');
+const ctx = mainCanvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const hiScoreEl = document.getElementById('hi-score');
+const clearCountEl = document.getElementById('clear-count');
+const gameOverEl = document.getElementById('game-over');
+const gameClearEl = document.getElementById('game-clear');
+const chainDisplayEl = document.getElementById('chain-display');
+const startScreenEl = document.getElementById('start-screen');
+
+// --- 初期化 ---
+function init() {
+    startScreenEl.style.display = 'none'; 
+
+    board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+    score = 0;
+    chainCount = 0;
+    clearCount = 0;
+    fallingBlocks = [];
+    pendingBombs = [];
+    floatingTexts = [];
+    updateScore();
+    clearCountEl.innerText = clearCount;
+    gameOverEl.classList.remove('active');
+    gameClearEl.classList.remove('active');
+    chainDisplayEl.classList.remove('show');
+    
+    nextPuyo = createRandomPuyo();
+    spawnPuyo();
+
+    state = 'PLAYING';
+    lastTime = performance.now();
+    dropCounter = 0;
+
+    if (reqId) cancelAnimationFrame(reqId);
+    reqId = requestAnimationFrame(update);
+}
+
+function createRandomPuyo() {
+    return {
+        color1: Math.floor(Math.random() * 4) + 1,
+        color2: Math.floor(Math.random() * 4) + 1
+    };
+}
+
+function spawnPuyo() {
+    currentPuyo = {
+        x: 2, y: 1,
+        color1: nextPuyo.color1,
+        color2: nextPuyo.color2,
+        rot: 0
+    };
+    nextPuyo = createRandomPuyo();
+
+    if (!isValidPos(currentPuyo.x, currentPuyo.y, currentPuyo.rot)) {
+        state = 'GAMEOVER';
+        document.getElementById('final-score').innerText = score;
+        gameOverEl.classList.add('active');
+    }
+}
+
+function getSubPos(x, y, rot) {
+    let sx = x, sy = y;
+    if (rot === 0) sy -= 1;
+    else if (rot === 1) sx += 1;
+    else if (rot === 2) sy += 1;
+    else if (rot === 3) sx -= 1;
+    return { x: sx, y: sy };
+}
+
+function isValidPos(x, y, rot) {
+    if (x < 0 || x >= COLS || y >= ROWS) return false;
+    if (y >= 0 && board[y][x] !== 0) return false;
+
+    let sub = getSubPos(x, y, rot);
+    if (sub.x < 0 || sub.x >= COLS || sub.y >= ROWS) return false;
+    if (sub.y >= 0 && board[sub.y][sub.x] !== 0) return false;
+
+    return true;
+}
+
+function moveLeft() { if (isValidPos(currentPuyo.x - 1, currentPuyo.y, currentPuyo.rot)) currentPuyo.x -= 1; }
+function moveRight() { if (isValidPos(currentPuyo.x + 1, currentPuyo.y, currentPuyo.rot)) currentPuyo.x += 1; }
+function rotate() {
+    let newRot = (currentPuyo.rot + 1) % 4;
+    if (isValidPos(currentPuyo.x, currentPuyo.y, newRot)) {
+        currentPuyo.rot = newRot;
+    } else {
+        if (isValidPos(currentPuyo.x + 1, currentPuyo.y, newRot)) { currentPuyo.x += 1; currentPuyo.rot = newRot; }
+        else if (isValidPos(currentPuyo.x - 1, currentPuyo.y, newRot)) { currentPuyo.x -= 1; currentPuyo.rot = newRot; }
+        else if (isValidPos(currentPuyo.x, currentPuyo.y - 1, newRot)) { currentPuyo.y -= 1; currentPuyo.rot = newRot; }
+    }
+}
+
+function moveDown() {
+    if (isValidPos(currentPuyo.x, currentPuyo.y + 1, currentPuyo.rot)) {
+        currentPuyo.y += 1;
+        return true;
+    }
+    return false;
+}
+
+function lockPuyo() {
+    if (currentPuyo.y >= 0) board[currentPuyo.y][currentPuyo.x] = currentPuyo.color1;
+    let sub = getSubPos(currentPuyo.x, currentPuyo.y, currentPuyo.rot);
+    if (sub.y >= 0) board[sub.y][sub.x] = currentPuyo.color2;
+}
+
+function initGravity() {
+    fallingBlocks = [];
+    let moved = false;
+
+    for (let c = 0; c < COLS; c++) {
+        let colData = [];
+        for (let r = 0; r < ROWS; r++) colData[r] = board[r][c];
+
+        let hasGap = true;
+        while (hasGap) {
+            hasGap = false;
+            for (let r = ROWS - 1; r > 0; r--) {
+                if (colData[r] === 0 && colData[r - 1] > 0) {
+                    for (let k = r; k > 0; k--) colData[k] = colData[k - 1];
+                    colData[0] = 0;
+                    hasGap = true;
+                    moved = true;
+                }
+            }
+        }
+
+        let srcR = ROWS - 1;
+        for (let dstR = ROWS - 1; dstR >= 0; dstR--) {
+            if (colData[dstR] > 0) {
+                while (srcR >= 0 && board[srcR][c] === 0) srcR--;
+                if (srcR >= 0) {
+                    if (srcR !== dstR) {
+                        fallingBlocks.push({
+                            c: c, color: board[srcR][c],
+                            currentY: srcR * CELL_SIZE, targetY: dstR * CELL_SIZE, targetR: dstR
+                        });
+                        board[srcR][c] = 0;
+                    }
+                    srcR--;
+                }
+            }
+        }
+    }
+    return moved;
+}
+
+// --- ボムと多連結を考慮した消去判定 ---
+function checkLines() {
+    let groups = [];
+    let visited = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+
+    // 1. 通常の色連結探索 (ボム: ID 9 は除外)
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (board[r][c] > 0 && board[r][c] < 9 && !visited[r][c]) {
+                let color = board[r][c];
+                let group = [];
+                let queue = [{ r, c }];
+                visited[r][c] = true;
+
+                while (queue.length > 0) {
+                    let curr = queue.shift();
+                    group.push(curr);
+
+                    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                    for (let d of dirs) {
+                        let nr = curr.r + d[0];
+                        let nc = curr.c + d[1];
+                        if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                            if (board[nr][nc] === color && !visited[nr][nc]) {
+                                visited[nr][nc] = true;
+                                queue.push({ r: nr, c: nc });
+                            }
+                        }
+                    }
+                }
+
+                if (group.length >= 4) {
+                    groups.push(group);
+                }
+            }
+        }
+    }
+
+    // 2. ボムの起爆判定
+    let toClearMap = Array(ROWS).fill().map(() => Array(COLS).fill(false));
+    let bombQueue = [];
+
+    // 消去されるマスに隣接するボムを探す
+    groups.forEach(group => {
+        group.forEach(p => {
+            toClearMap[p.r][p.c] = true;
+            const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (let d of dirs) {
+                let nr = p.r + d[0];
+                let nc = p.c + d[1];
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                    // 隣接マスにボム(9)があれば起爆リストへ
+                    if (board[nr][nc] === 9 && !toClearMap[nr][nc]) {
+                        toClearMap[nr][nc] = true;
+                        bombQueue.push({r: nr, c: nc});
+                    }
+                }
+            }
+        });
+    });
+
+    // 3. ボム起爆による周囲破壊と連鎖爆発
+    let explodedBombs = [];
+    while (bombQueue.length > 0) {
+        let bomb = bombQueue.shift();
+        explodedBombs.push(bomb);
+
+        // 周囲3x3(8マス)を破壊対象に追加
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                let nr = bomb.r + dr;
+                let nc = bomb.c + dc;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                    if (board[nr][nc] > 0 && !toClearMap[nr][nc]) {
+                        toClearMap[nr][nc] = true;
+                        // 破壊したマスが未起爆のボムなら誘爆させる
+                        if (board[nr][nc] === 9) {
+                            bombQueue.push({r: nr, c: nc});
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let allToClear = [];
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (toClearMap[r][c]) {
+                allToClear.push({r, c});
+            }
+        }
+    }
+
+    return { groups, allToClear, explodedBombs };
+}
+
+function updateScore() {
+    if (score > highScore) highScore = score;
+    scoreEl.innerText = score;
+    hiScoreEl.innerText = highScore;
+}
+
+function showChain(count) {
+    if (count < 2) return;
+    chainDisplayEl.innerText = `${count} 連鎖!`;
+    chainDisplayEl.classList.remove('show');
+    void chainDisplayEl.offsetWidth;
+    chainDisplayEl.classList.add('show');
+
+    // 追加: 表示から1.5秒後に 'show' クラスを外してフェードアウトさせる
+    if (chainDisplayTimer) clearTimeout(chainDisplayTimer);
+    chainDisplayTimer = setTimeout(() => {
+        chainDisplayEl.classList.remove('show');
+    }, 1500);
+}
+
+// 演出効果発動用
+function triggerSpecialEffect(count, isBomb = false) {
+    // スクリーンシェイク
+    const boardContainer = document.querySelector('.board-container');
+    boardContainer.classList.remove('shake');
+    void boardContainer.offsetWidth; // リフロー強制
+    boardContainer.classList.add('shake');
+
+    // フラッシュバック
+    const flash = document.getElementById('flash-effect');
+    flash.classList.add('flash');
+    setTimeout(() => { flash.classList.remove('flash'); }, 100);
+
+    // テキストエフェクト
+    let text = isBomb ? "BOMB!" : "Great!";
+    let color = isBomb ? "#ff4b4b" : "#ff4b4b";
+
+    if (!isBomb) {
+        if (count >= 7) { text = "Amazing!"; color = "#ffdd4b"; }
+        else if (count >= 6) { text = "Excellent!"; color = "#4bff4b"; }
+    }
+    
+    floatingTexts.push({
+        x: mainCanvas.width / 2,
+        y: mainCanvas.height / 2 + (isBomb ? 50 : 0),
+        text: text,
+        color: color,
+        life: 0,
+        maxLife: 1500
+    });
+}
+
+// --- メインループ ---
+function update(time) {
+    let deltaTime = time - lastTime;
+    lastTime = time;
+
+    // フローティングテキストの寿命更新
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        floatingTexts[i].life += deltaTime;
+        if (floatingTexts[i].life >= floatingTexts[i].maxLife) {
+            floatingTexts.splice(i, 1);
+        }
+    }
+
+    if (state === 'PLAYING') {
+        let currentInterval = isFastDrop ? 50 : 1000;
+        dropCounter += deltaTime;
+
+        if (dropCounter > currentInterval) {
+            dropCounter = 0;
+            if (!moveDown()) {
+                lockPuyo();
+                let willDrop = initGravity();
+                if (willDrop) state = 'DROPPING';
+                else state = 'CHECKING';
+                dropCounter = 0;
+            }
+        }
+    } 
+    else if (state === 'CHECKING') {
+        let checkResult = checkLines();
+        
+        if (checkResult.allToClear.length > 0) {
+            chainCount++;
+            showChain(chainCount);
+            
+            let hasSpecial = false;
+            let pendingBombsLocal = [];
+            let maxClearCount = 0;
+
+            // 通常グループの消去回数カウントとボム生成チェック
+            checkResult.groups.forEach(group => {
+                clearCount++;
+                if (group.length >= 5) {
+                    hasSpecial = true;
+                    maxClearCount = Math.max(maxClearCount, group.length);
+                    // グループの中心付近にボムを生成予約
+                    let centerP = group[Math.floor(group.length / 2)];
+                    pendingBombsLocal.push({r: centerP.r, c: centerP.c});
+                }
+            });
+            clearCountEl.innerText = clearCount;
+
+            // エフェクト発動
+            if (hasSpecial) {
+                triggerSpecialEffect(maxClearCount);
+            }
+            if (checkResult.explodedBombs.length > 0) {
+                triggerSpecialEffect(0, true); // ボム爆発エフェクト
+            }
+
+            // スコア加算
+            let pts = checkResult.allToClear.length * 10 * chainCount;
+            if (hasSpecial) pts += maxClearCount * 50; // 多連結ボーナス
+            score += pts;
+            updateScore();
+
+            // 消去マスを負の数にして点滅エフェクトをかける
+            checkResult.allToClear.forEach(p => {
+                board[p.r][p.c] = -Math.abs(board[p.r][p.c]);
+            });
+
+            pendingBombs = pendingBombsLocal; // CLEARING後に実体化
+            state = 'CLEARING';
+            dropCounter = 0;
+        } else {
+            chainCount = 0;
+            
+            if (clearCount >= TARGET_CLEAR_COUNT) {
+                state = 'GAMECLEAR';
+                document.getElementById('final-clear-score').innerText = score;
+                gameClearEl.classList.add('active');
+            } else {
+                spawnPuyo();
+                if (state !== 'GAMEOVER') state = 'PLAYING';
+            }
+        }
+    } 
+    else if (state === 'CLEARING') {
+        dropCounter += deltaTime;
+        if (dropCounter > 500) {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (board[r][c] < 0) board[r][c] = 0; // 完全に消す
+                }
+            }
+            
+            // 予約されていたボムを盤面に配置
+            pendingBombs.forEach(p => {
+                board[p.r][p.c] = 9; // ボムのIDは 9
+            });
+            pendingBombs = [];
+
+            let willDrop = initGravity();
+            if (willDrop) state = 'DROPPING';
+            else state = 'CHECKING';
+            dropCounter = 0;
+        }
+    } 
+    else if (state === 'DROPPING') {
+        let allLanded = true;
+        let dropSpeed = 1.0 * deltaTime; 
+
+        for (let i = 0; i < fallingBlocks.length; i++) {
+            let fb = fallingBlocks[i];
+            if (fb.currentY < fb.targetY) {
+                fb.currentY += dropSpeed;
+                if (fb.currentY >= fb.targetY) fb.currentY = fb.targetY;
+                else allLanded = false;
+            }
+        }
+
+        if (allLanded) {
+            fallingBlocks.forEach(fb => { board[fb.targetR][fb.c] = fb.color; });
+            fallingBlocks = [];
+            state = 'CHECKING';
+        }
+    }
+
+    draw();
+    reqId = requestAnimationFrame(update);
+}
+
+// --- 描画処理 ---
+function drawPuyo(ctxObj, x, y, size, colorIndex, r, c) {
+    let time = performance.now();
+    let seed = (r !== undefined && c !== undefined) ? (r * 10 + c) * 100 : (x + y);
+
+    let pulse = 1 + 0.05 * Math.sin((time + seed) / 300);
+    let isClearing = (r !== undefined && c !== undefined && board[r] && board[r][c] < 0);
+    let jiggleAmt = isClearing ? 2.5 : 0.8;
+    let jiggleX = Math.sin((time + seed * 2) / 40) * jiggleAmt;
+    let jiggleY = Math.cos((time + seed * 3) / 45) * jiggleAmt;
+
+    let cx = x + size / 2 + jiggleX;
+    let cy = y + size / 2 + jiggleY;
+    let radius = (size / 2 - 2) * pulse;
+
+    // --- 特殊アイテム：ボムブロックの描画 ---
+    if (Math.abs(colorIndex) === 9) {
+        ctxObj.fillStyle = '#222'; // 黒色
+        ctxObj.beginPath();
+        ctxObj.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctxObj.fill();
+        
+        ctxObj.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctxObj.beginPath();
+        ctxObj.arc(cx - size / 6 * pulse, cy - size / 6 * pulse, radius / 3, 0, Math.PI * 2);
+        ctxObj.fill();
+
+        ctxObj.fillStyle = '#ff4b4b'; // 文字 B
+        ctxObj.font = `bold ${size * 0.5}px sans-serif`;
+        ctxObj.textAlign = 'center';
+        ctxObj.textBaseline = 'middle';
+        ctxObj.fillText('B', cx, cy);
+
+        // 導火線の火花
+        let sparkX = cx + radius * 0.6;
+        let sparkY = cy - radius * 0.6;
+        ctxObj.fillStyle = (time % 200 < 100) ? '#ffcc00' : '#ff4b4b';
+        ctxObj.beginPath();
+        ctxObj.arc(sparkX, sparkY, size * 0.15 * Math.random() + 2, 0, Math.PI * 2);
+        ctxObj.fill();
+        
+        return; // ボムは目や繋がりを描かない
+    }
+
+    // --- 通常ぷよの描画 ---
+    let color = COLORS[Math.abs(colorIndex) - 1];
+    if (!color) return; // 安全対策
+
+    ctxObj.fillStyle = color;
+    ctxObj.beginPath();
+    ctxObj.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctxObj.fill();
+
+    if (r !== undefined && c !== undefined && board[r]) {
+        let ext = 2; 
+        if (c < COLS - 1 && Math.abs(board[r][c+1]) === colorIndex) {
+            ctxObj.fillRect(cx, cy - radius, (x + size) - cx + ext, radius * 2);
+        }
+        if (c > 0 && Math.abs(board[r][c-1]) === colorIndex) {
+            let w = cx - x + ext;
+            ctxObj.fillRect(cx - w, cy - radius, w, radius * 2);
+        }
+        if (r < ROWS - 1 && Math.abs(board[r+1][c]) === colorIndex) {
+            ctxObj.fillRect(cx - radius, cy, radius * 2, (y + size) - cy + ext);
+        }
+        if (r > 0 && Math.abs(board[r-1][c]) === colorIndex) {
+            let h = cy - y + ext;
+            ctxObj.fillRect(cx - radius, cy - h, radius * 2, h);
+        }
+    }
+
+    ctxObj.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctxObj.beginPath();
+    ctxObj.arc(cx - size / 6 * pulse, cy - size / 6 * pulse, radius / 3, 0, Math.PI * 2);
+    ctxObj.fill();
+
+    let eyeR = size / 7 * pulse;
+    let pupilR = size / 15 * pulse;
+    let isGameOver = (state === 'GAMEOVER');
+    let isGameClear = (state === 'GAMECLEAR');
+    
+    let blinkCycle = (time + seed * 5) % 4000;
+    let isBlinking = blinkCycle < 150; 
+    
+    ctxObj.lineWidth = 2;
+    ctxObj.lineCap = 'round';
+    ctxObj.lineJoin = 'round';
+
+    if (isGameOver) {
+        ctxObj.strokeStyle = '#000';
+        ctxObj.beginPath();
+        ctxObj.moveTo(cx - eyeR*1.6, cy - eyeR*1.6); ctxObj.lineTo(cx - eyeR*0.4, cy - eyeR*0.4);
+        ctxObj.moveTo(cx - eyeR*0.4, cy - eyeR*1.6); ctxObj.lineTo(cx - eyeR*1.6, cy - eyeR*0.4);
+        ctxObj.moveTo(cx + eyeR*0.4, cy - eyeR*1.6); ctxObj.lineTo(cx + eyeR*1.6, cy - eyeR*0.4);
+        ctxObj.moveTo(cx + eyeR*1.6, cy - eyeR*1.6); ctxObj.lineTo(cx + eyeR*0.4, cy - eyeR*0.4);
+        ctxObj.stroke();
+    } else if (isGameClear) {
+        ctxObj.strokeStyle = '#000';
+        ctxObj.beginPath();
+        ctxObj.moveTo(cx - eyeR*1.8, cy - eyeR*0.8);
+        ctxObj.quadraticCurveTo(cx - eyeR*1.0, cy - eyeR*1.8, cx - eyeR*0.2, cy - eyeR*0.8);
+        ctxObj.moveTo(cx + eyeR*0.2, cy - eyeR*0.8);
+        ctxObj.quadraticCurveTo(cx + eyeR*1.0, cy - eyeR*1.8, cx + eyeR*1.8, cy - eyeR*0.8);
+        ctxObj.stroke();
+    } else if (isClearing) {
+        ctxObj.strokeStyle = '#000';
+        ctxObj.beginPath();
+        ctxObj.moveTo(cx - eyeR*0.4, cy - eyeR*1.5); ctxObj.lineTo(cx - eyeR*1.5, cy - eyeR*0.8); ctxObj.lineTo(cx - eyeR*0.4, cy - eyeR*0.2);
+        ctxObj.moveTo(cx + eyeR*0.4, cy - eyeR*1.5); ctxObj.lineTo(cx + eyeR*1.5, cy - eyeR*0.8); ctxObj.lineTo(cx + eyeR*0.4, cy - eyeR*0.2);
+        ctxObj.stroke();
+    } else if (isBlinking) {
+        ctxObj.strokeStyle = '#000';
+        ctxObj.beginPath();
+        ctxObj.moveTo(cx - eyeR*2.0, cy - eyeR); ctxObj.lineTo(cx - eyeR*0.2, cy - eyeR);
+        ctxObj.moveTo(cx + eyeR*0.2, cy - eyeR); ctxObj.lineTo(cx + eyeR*2.0, cy - eyeR);
+        ctxObj.stroke();
+    } else {
+        ctxObj.fillStyle = '#fff';
+        ctxObj.beginPath();
+        ctxObj.arc(cx - eyeR*1.2, cy - eyeR, eyeR, 0, Math.PI*2);
+        ctxObj.arc(cx + eyeR*1.2, cy - eyeR, eyeR, 0, Math.PI*2);
+        ctxObj.fill();
+
+        let lookX = Math.sin(time / 1000 + seed) * pupilR * 0.5;
+        let lookY = Math.cos(time / 1500 + seed) * pupilR * 0.5;
+        
+        ctxObj.fillStyle = '#000';
+        ctxObj.beginPath();
+        ctxObj.arc(cx - eyeR*1.2 + pupilR + lookX, cy - eyeR + lookY, pupilR, 0, Math.PI*2);
+        ctxObj.arc(cx + eyeR*1.2 - pupilR + lookX, cy - eyeR + lookY, pupilR, 0, Math.PI*2);
+        ctxObj.fill();
+    }
+}
+
+function drawNext() {
+    const nCanvas = document.getElementById('next-canvas');
+    const nCtx = nCanvas.getContext('2d');
+    nCtx.clearRect(0, 0, nCanvas.width, nCanvas.height);
+    
+    if (nextPuyo) {
+        drawPuyo(nCtx, 15, 60, 50, nextPuyo.color1);
+        drawPuyo(nCtx, 15, 10, 50, nextPuyo.color2);
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= COLS; i++) {
+        ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, mainCanvas.height); ctx.stroke();
+    }
+    for (let i = 0; i <= ROWS; i++) {
+        ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(mainCanvas.width, i * CELL_SIZE); ctx.stroke();
+    }
+
+    // 盤面描画
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            let val = board[r][c];
+            if (val < 0) {
+                let alpha = (Math.floor(Date.now() / 100) % 2 === 0) ? 0.3 : 1.0;
+                ctx.globalAlpha = alpha;
+                drawPuyo(ctx, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, Math.abs(val), r, c);
+                ctx.globalAlpha = 1.0;
+            } else if (val > 0) {
+                drawPuyo(ctx, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, val, r, c);
+            }
+        }
+    }
+
+    // 操作中
+    if (state === 'PLAYING' && currentPuyo) {
+        if (currentPuyo.y >= 0) drawPuyo(ctx, currentPuyo.x * CELL_SIZE, currentPuyo.y * CELL_SIZE, CELL_SIZE, currentPuyo.color1);
+        let sub = getSubPos(currentPuyo.x, currentPuyo.y, currentPuyo.rot);
+        if (sub.y >= 0) drawPuyo(ctx, sub.x * CELL_SIZE, sub.y * CELL_SIZE, CELL_SIZE, currentPuyo.color2);
+    }
+
+    // 落下アニメーション
+    if (fallingBlocks.length > 0) {
+        for (let fb of fallingBlocks) drawPuyo(ctx, fb.c * CELL_SIZE, fb.currentY, CELL_SIZE, fb.color);
+    }
+
+    // テキストエフェクト描画
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        let ft = floatingTexts[i];
+        let progress = ft.life / ft.maxLife;
+        let ty = ft.y - progress * 50; 
+        let alpha = 1 - Math.pow(progress, 3);
+        
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.font = `bold ${30 + progress * 10}px 'Segoe UI', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = ft.color;
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#fff';
+        ctx.strokeText(ft.text, ft.x, ty);
+        ctx.fillText(ft.text, ft.x, ty);
+        ctx.restore();
+    }
+
+    drawNext();
+}
+
+// --- イベントリスナー設定 ---
+function attachBtn(id, downCb, upCb) {
+    const btn = document.getElementById(id);
+    const startHandler = (e) => { e.preventDefault(); btn.classList.add('active'); if (downCb) downCb(); };
+    const endHandler = (e) => { e.preventDefault(); btn.classList.remove('active'); if (upCb) upCb(); };
+
+    btn.addEventListener('touchstart', startHandler, { passive: false });
+    btn.addEventListener('mousedown', startHandler);
+    btn.addEventListener('touchend', endHandler);
+    btn.addEventListener('mouseup', endHandler);
+    btn.addEventListener('mouseleave', endHandler);
+}
+
+attachBtn('btn-left', () => { if (state === 'PLAYING') moveLeft(); });
+attachBtn('btn-right', () => { if (state === 'PLAYING') moveRight(); });
+attachBtn('btn-rot', () => { if (state === 'PLAYING') rotate(); });
+attachBtn('btn-down', () => { if (state === 'PLAYING') isFastDrop = true; }, () => { isFastDrop = false; });
+
+document.addEventListener('keydown', (e) => {
+    if (state !== 'PLAYING') return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); moveLeft(); document.getElementById('btn-left').classList.add('active');}
+    if (e.key === 'ArrowRight') { e.preventDefault(); moveRight(); document.getElementById('btn-right').classList.add('active');}
+    if (e.key === 'ArrowDown') { e.preventDefault(); isFastDrop = true; document.getElementById('btn-down').classList.add('active');}
+    if (e.key === 'ArrowUp' || e.key === ' ') { e.preventDefault(); rotate(); document.getElementById('btn-rot').classList.add('active');}
+});
+document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft') document.getElementById('btn-left').classList.remove('active');
+    if (e.key === 'ArrowRight') document.getElementById('btn-right').classList.remove('active');
+    if (e.key === 'ArrowDown') { isFastDrop = false; document.getElementById('btn-down').classList.remove('active');}
+    if (e.key === 'ArrowUp' || e.key === ' ') document.getElementById('btn-rot').classList.remove('active');
+});
+
+document.getElementById('retry-btn').addEventListener('click', init);
+document.getElementById('retry-btn').addEventListener('touchstart', (e) => { e.preventDefault(); init(); }, { passive: false });
+document.getElementById('clear-retry-btn').addEventListener('click', init);
+document.getElementById('clear-retry-btn').addEventListener('touchstart', (e) => { e.preventDefault(); init(); }, { passive: false });
+document.getElementById('start-btn').addEventListener('click', init);
+document.getElementById('start-btn').addEventListener('touchstart', (e) => { e.preventDefault(); init(); }, { passive: false });
+
+window.onload = () => {
+    board = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+    updateScore();
+    lastTime = performance.now();
+    reqId = requestAnimationFrame(update); 
+};
+</script>
+</body>
+</html>
